@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Link2, ArrowRight, Loader2, Minus, Plus, Calendar, MapPin, Sparkles, MessageSquare } from 'lucide-react'
+import { Link2, ArrowRight, Loader2, Minus, Plus, Calendar, MapPin, Sparkles, MessageSquare, Users, CreditCard } from 'lucide-react'
 import api from '../api/client'
 
 interface EventPackage {
@@ -18,6 +18,19 @@ interface EventPreview {
   packages: EventPackage[]
 }
 
+interface Guest {
+  id: string
+  label: string
+  full_name: string
+}
+
+interface PaymentMethod {
+  id: string
+  method_type: string
+  label: string
+  is_default: boolean
+}
+
 export default function NewBooking() {
   const navigate = useNavigate()
   const [url, setUrl] = useState('')
@@ -28,6 +41,19 @@ export default function NewBooking() {
   const [quantity, setQuantity] = useState(1)
   const [notes, setNotes] = useState('')
   const [error, setError] = useState('')
+  const [guests, setGuests] = useState<Guest[]>([])
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
+  const [selectedGuests, setSelectedGuests] = useState<string[]>([])
+  const [selectedPayment, setSelectedPayment] = useState('')
+
+  useEffect(() => {
+    api.get('/guests').then(({ data }) => setGuests(data)).catch(() => {})
+    api.get('/payment-methods').then(({ data }) => {
+      setPaymentMethods(data)
+      const def = data.find((m: PaymentMethod) => m.is_default)
+      if (def) setSelectedPayment(def.method_type)
+    }).catch(() => {})
+  }, [])
 
   const handleUrlPaste = async (value: string) => {
     setUrl(value)
@@ -76,6 +102,8 @@ export default function NewBooking() {
         ticket_category: selectedPackage || 'Auto (termurah tersedia)',
         quantity,
         notes,
+        guest_ids: selectedGuests,
+        payment_method: selectedPayment,
       })
       navigate(`/bookings/${data.id}`)
     } catch {
@@ -281,6 +309,73 @@ export default function NewBooking() {
                     />
                   </motion.div>
                 </details>
+
+                {/* Guest Selection (when qty > 1) */}
+                <AnimatePresence>
+                  {quantity > 1 && guests.length > 0 && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="space-y-2">
+                      <label className="text-sm font-medium text-text-secondary flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5" />
+                        Pengunjung lain ({quantity - 1} orang)
+                      </label>
+                      <p className="text-xs text-text-tertiary">Tiket 1 otomatis menggunakan data pemesan. Pilih pengunjung untuk tiket lainnya:</p>
+                      <div className="space-y-1.5">
+                        {guests.map((g) => {
+                          const isSelected = selectedGuests.includes(g.id)
+                          return (
+                            <button
+                              key={g.id}
+                              type="button"
+                              onClick={() => {
+                                if (isSelected) {
+                                  setSelectedGuests(selectedGuests.filter((id) => id !== g.id))
+                                } else if (selectedGuests.length < quantity - 1) {
+                                  setSelectedGuests([...selectedGuests, g.id])
+                                }
+                              }}
+                              className={`w-full text-left px-3 py-2.5 rounded-lg border text-sm transition-all ${
+                                isSelected ? 'border-accent bg-accent/5' : 'border-sand-200 hover:border-sand-300'
+                              } ${!isSelected && selectedGuests.length >= quantity - 1 ? 'opacity-40 cursor-not-allowed' : ''}`}
+                              disabled={!isSelected && selectedGuests.length >= quantity - 1}
+                            >
+                              <span className="font-medium text-text-primary">{g.full_name}</span>
+                              {g.label && <span className="text-text-tertiary ml-2">({g.label})</span>}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      {selectedGuests.length < quantity - 1 && (
+                        <p className="text-xs text-amber-600">Pilih {quantity - 1 - selectedGuests.length} pengunjung lagi, atau agent akan isi data yang sama</p>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Payment Method */}
+                {paymentMethods.length > 0 && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-text-secondary flex items-center gap-1.5">
+                      <CreditCard className="w-3.5 h-3.5" />
+                      Metode Pembayaran
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {paymentMethods.map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setSelectedPayment(m.method_type)}
+                          className={`px-3 py-2 rounded-lg text-sm border transition-all ${
+                            selectedPayment === m.method_type
+                              ? 'border-accent bg-accent/5 text-accent font-medium'
+                              : 'border-sand-200 text-text-secondary hover:border-sand-300'
+                          }`}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Submit */}
                 <button
