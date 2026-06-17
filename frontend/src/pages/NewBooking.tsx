@@ -1,48 +1,87 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { Link2, Users, Tag, Ticket, ArrowRight, Info } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Link2, ArrowRight, Loader2, Minus, Plus, Calendar, MapPin, Sparkles, MessageSquare } from 'lucide-react'
 import api from '../api/client'
+
+interface EventPackage {
+  name: string
+  price: string
+  available: boolean
+}
+
+interface EventPreview {
+  name: string
+  date: string
+  venue: string
+  poster_url: string
+  packages: EventPackage[]
+}
 
 export default function NewBooking() {
   const navigate = useNavigate()
+  const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(false)
-  const [form, setForm] = useState({
-    event_name: '',
-    event_url: '',
-    ticket_category: '',
-    quantity: 1,
-    notes: '',
-  })
+  const [fetching, setFetching] = useState(false)
+  const [preview, setPreview] = useState<EventPreview | null>(null)
+  const [selectedPackage, setSelectedPackage] = useState<string>('')
+  const [quantity, setQuantity] = useState(1)
+  const [notes, setNotes] = useState('')
+  const [error, setError] = useState('')
+
+  const handleUrlPaste = async (value: string) => {
+    setUrl(value)
+    setError('')
+    setPreview(null)
+
+    // Auto-fetch when valid tiket.com URL detected
+    if (value.includes('tiket.com/id-id/to-do/') && value.length > 40) {
+      setFetching(true)
+      try {
+        const { data } = await api.post('/bookings/preview', { url: value })
+        setPreview(data)
+        if (data.packages?.length > 0) {
+          setSelectedPackage(data.packages[0].name)
+        }
+      } catch {
+        // Fallback: extract name from URL
+        const match = value.match(/to-do\/([^?/]+)/)
+        if (match) {
+          const name = match[1].replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+          setPreview({
+            name,
+            date: '',
+            venue: '',
+            poster_url: '',
+            packages: [],
+          })
+        } else {
+          setError('Tidak bisa membaca event dari URL ini')
+        }
+      } finally {
+        setFetching(false)
+      }
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!preview) return
     setLoading(true)
 
     try {
       const { data } = await api.post('/bookings', {
-        event_name: form.event_name,
-        event_url: form.event_url,
-        ticket_category: form.ticket_category,
-        quantity: form.quantity,
-        notes: form.notes,
+        event_name: preview.name,
+        event_url: url,
+        ticket_category: selectedPackage || 'Auto (termurah tersedia)',
+        quantity,
+        notes,
       })
       navigate(`/bookings/${data.id}`)
     } catch {
-      alert('Gagal membuat booking')
+      setError('Gagal membuat booking')
     } finally {
       setLoading(false)
-    }
-  }
-
-  // Auto-detect event name from URL
-  const handleUrlChange = (url: string) => {
-    setForm({ ...form, event_url: url })
-    // Try to extract event name from tiket.com URL
-    const match = url.match(/to-do\/([^?]+)/)
-    if (match) {
-      const name = match[1].replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-      setForm((prev) => ({ ...prev, event_url: url, event_name: prev.event_name || name }))
     }
   }
 
@@ -56,126 +95,234 @@ export default function NewBooking() {
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-text-primary">Pesan Tiket Event</h1>
         <p className="text-sm text-text-tertiary mt-1">
-          AI agent akan membuka tiket.com dan melakukan pemesanan untuk kamu
+          Paste link event, sisanya biar agent yang urus
         </p>
       </div>
 
       <div className="card p-6">
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Event URL */}
+          {/* URL Input — the only required action from user */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-text-secondary flex items-center gap-1.5">
               <Link2 className="w-3.5 h-3.5" />
-              URL Event di tiket.com
+              Link Event
             </label>
-            <input
-              type="url"
-              value={form.event_url}
-              onChange={(e) => handleUrlChange(e.target.value)}
-              placeholder="https://www.tiket.com/id-id/to-do/..."
-              required
-              className="input-field"
-            />
-            <p className="text-xs text-text-tertiary flex items-center gap-1">
-              <Info className="w-3 h-3" />
-              Paste link event dari tiket.com
-            </p>
-          </div>
-
-          {/* Event Name */}
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-text-secondary flex items-center gap-1.5">
-              <Ticket className="w-3.5 h-3.5" />
-              Nama Event
-            </label>
-            <input
-              type="text"
-              value={form.event_name}
-              onChange={(e) => setForm({ ...form, event_name: e.target.value })}
-              placeholder="My Chemical Romance Live in Jakarta 2026"
-              required
-              className="input-field"
-            />
-          </div>
-
-          {/* Category & Quantity */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-text-secondary flex items-center gap-1.5">
-                <Tag className="w-3.5 h-3.5" />
-                Kategori Tiket
-              </label>
-              <select
-                value={form.ticket_category}
-                onChange={(e) => setForm({ ...form, ticket_category: e.target.value })}
-                required
-                className="input-field"
-              >
-                <option value="">Pilih kategori</option>
-                <option value="CAT 1">CAT 1 (Terdekat)</option>
-                <option value="CAT 2">CAT 2</option>
-                <option value="CAT 3">CAT 3</option>
-                <option value="CAT 4">CAT 4</option>
-                <option value="Festival">Festival (Standing)</option>
-                <option value="VIP">VIP</option>
-                <option value="Cheapest">Termurah (Auto)</option>
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-text-secondary flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5" />
-                Jumlah Tiket
-              </label>
+            <div className="relative">
               <input
-                type="number"
-                min={1}
-                max={4}
-                value={form.quantity}
-                onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) })}
+                type="url"
+                value={url}
+                onChange={(e) => handleUrlPaste(e.target.value)}
+                onPaste={(e) => {
+                  setTimeout(() => handleUrlPaste((e.target as HTMLInputElement).value), 100)
+                }}
+                placeholder="Paste link dari tiket.com..."
                 required
-                className="input-field"
+                className="input-field pr-10"
+                autoFocus
               />
+              {fetching && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <Loader2 className="w-4 h-4 text-accent animate-spin" />
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Notes */}
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-text-secondary">
-              Catatan tambahan (opsional)
-            </label>
-            <textarea
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              placeholder="Prefer seating dekat stage, budget max 2jt, dll..."
-              rows={3}
-              className="input-field resize-none"
-            />
-          </div>
-
-          {/* Submit */}
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-primary w-full flex items-center justify-center gap-2"
-          >
-            {loading ? (
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
-              />
-            ) : (
-              <>
-                Mulai Booking
-                <ArrowRight className="w-4 h-4" />
-              </>
+          {/* Error */}
+          <AnimatePresence>
+            {error && (
+              <motion.p
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="text-sm text-red-600"
+              >
+                {error}
+              </motion.p>
             )}
-          </button>
+          </AnimatePresence>
 
-          <p className="text-xs text-text-tertiary text-center">
-            Agent akan mencari tiket dan meminta konfirmasi sebelum pembayaran
-          </p>
+          {/* Loading shimmer */}
+          <AnimatePresence>
+            {fetching && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-3"
+              >
+                <div className="h-32 bg-sand-100 rounded-xl animate-pulse" />
+                <div className="h-4 bg-sand-100 rounded-lg w-2/3 animate-pulse" />
+                <div className="h-4 bg-sand-100 rounded-lg w-1/2 animate-pulse" />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Event Preview Card */}
+          <AnimatePresence>
+            {preview && !fetching && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-4"
+              >
+                {/* Event info card */}
+                <div className="bg-sand-50 border border-sand-200 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Sparkles className="w-4 h-4 text-accent" />
+                    <span className="text-xs font-medium text-accent">Event terdeteksi</span>
+                  </div>
+                  <h3 className="text-lg font-semibold text-text-primary">{preview.name}</h3>
+                  {preview.date && (
+                    <p className="text-sm text-text-secondary flex items-center gap-1.5 mt-1.5">
+                      <Calendar className="w-3.5 h-3.5" />
+                      {preview.date}
+                    </p>
+                  )}
+                  {preview.venue && (
+                    <p className="text-sm text-text-secondary flex items-center gap-1.5 mt-1">
+                      <MapPin className="w-3.5 h-3.5" />
+                      {preview.venue}
+                    </p>
+                  )}
+                </div>
+
+                {/* Package selection */}
+                {preview.packages.length > 0 ? (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-text-secondary">Pilih Paket</label>
+                    <div className="space-y-2">
+                      {preview.packages.map((pkg) => (
+                        <motion.button
+                          key={pkg.name}
+                          type="button"
+                          onClick={() => pkg.available && setSelectedPackage(pkg.name)}
+                          whileTap={{ scale: 0.98 }}
+                          className={`w-full text-left px-4 py-3 rounded-xl border transition-all duration-200 ${
+                            selectedPackage === pkg.name
+                              ? 'border-accent bg-accent/5 ring-1 ring-accent/20'
+                              : pkg.available
+                              ? 'border-sand-200 hover:border-sand-300 bg-white'
+                              : 'border-sand-100 bg-sand-50 opacity-50 cursor-not-allowed'
+                          }`}
+                          disabled={!pkg.available}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-text-primary">{pkg.name}</span>
+                            <span className="text-sm text-text-secondary">{pkg.price}</span>
+                          </div>
+                          {!pkg.available && (
+                            <span className="text-xs text-red-500 mt-0.5">Sold out</span>
+                          )}
+                        </motion.button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-text-secondary">Preferensi Paket</label>
+                    <input
+                      type="text"
+                      value={selectedPackage}
+                      onChange={(e) => setSelectedPackage(e.target.value)}
+                      placeholder="Tulis nama paket, atau kosongkan untuk auto-pilih termurah"
+                      className="input-field"
+                    />
+                    <p className="text-xs text-text-tertiary">
+                      Agent akan melihat paket yang tersedia dan memilihkan sesuai preferensi
+                    </p>
+                  </div>
+                )}
+
+                {/* Quantity */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-text-secondary">Jumlah Tiket</label>
+                  <div className="flex items-center gap-3">
+                    <motion.button
+                      type="button"
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                      className="w-9 h-9 rounded-lg border border-sand-200 flex items-center justify-center hover:bg-sand-50 transition-colors"
+                    >
+                      <Minus className="w-4 h-4 text-text-secondary" />
+                    </motion.button>
+                    <span className="text-lg font-semibold text-text-primary w-8 text-center">{quantity}</span>
+                    <motion.button
+                      type="button"
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => setQuantity(Math.min(4, quantity + 1))}
+                      className="w-9 h-9 rounded-lg border border-sand-200 flex items-center justify-center hover:bg-sand-50 transition-colors"
+                    >
+                      <Plus className="w-4 h-4 text-text-secondary" />
+                    </motion.button>
+                    <span className="text-xs text-text-tertiary">Maks 4 per transaksi</span>
+                  </div>
+                </div>
+
+                {/* Notes — collapsed by default */}
+                <details className="group">
+                  <summary className="text-sm font-medium text-text-tertiary cursor-pointer flex items-center gap-1.5 hover:text-text-secondary transition-colors">
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    Tambah catatan untuk agent
+                  </summary>
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="mt-2"
+                  >
+                    <textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Contoh: Pilih yang paling dekat stage, budget max 3jt..."
+                      rows={2}
+                      className="input-field resize-none text-sm"
+                    />
+                  </motion.div>
+                </details>
+
+                {/* Submit */}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="btn-primary w-full flex items-center justify-center gap-2 mt-2"
+                >
+                  {loading ? (
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                      className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
+                    />
+                  ) : (
+                    <>
+                      Mulai Booking
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+
+                <p className="text-xs text-text-tertiary text-center">
+                  Agent akan buka halaman event, pilih tiket, dan minta konfirmasi sebelum bayar
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Empty state — before URL pasted */}
+          {!preview && !fetching && !url && (
+            <div className="py-8 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-sand-100 mx-auto mb-4 flex items-center justify-center">
+                <Link2 className="w-7 h-7 text-sand-400" />
+              </div>
+              <p className="text-sm text-text-tertiary">
+                Paste link event dari tiket.com untuk mulai
+              </p>
+              <p className="text-xs text-text-tertiary mt-2 max-w-xs mx-auto">
+                Contoh: link konser My Chemical Romance, LANY, atau event apapun di tiket.com
+              </p>
+            </div>
+          )}
         </form>
       </div>
     </motion.div>

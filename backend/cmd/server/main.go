@@ -117,6 +117,7 @@ func main() {
 			// Bookings
 			r.Get("/bookings", bookingService.ListHandler)
 			r.Post("/bookings", bookingService.CreateHandler)
+			r.Post("/bookings/preview", bookingService.PreviewHandler)
 			r.Get("/bookings/{id}", bookingService.GetHandler)
 			r.Post("/bookings/{id}/confirm", bookingService.ConfirmHandler)
 			r.Delete("/bookings/{id}", bookingService.CancelHandler)
