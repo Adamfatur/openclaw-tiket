@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard'
 import NewBooking from './pages/NewBooking'
 import BookingDetail from './pages/BookingDetail'
 import Users from './pages/Users'
+import Settings from './pages/Settings'
 import Layout from './components/Layout'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -34,6 +35,7 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="book" element={<NewBooking />} />
         <Route path="bookings/:id" element={<BookingDetail />} />
+        <Route path="settings" element={<Settings />} />
         <Route
           path="users"
           element={

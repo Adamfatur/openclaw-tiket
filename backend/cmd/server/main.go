@@ -106,6 +106,13 @@ func main() {
 			r.Get("/users/me", userService.GetMeHandler)
 			r.Put("/users/me", userService.UpdateMeHandler)
 
+			// Profile & Credentials
+			r.Get("/profile", userService.GetProfileHandler)
+			r.Put("/profile", userService.UpdateProfileHandler)
+			r.Get("/credentials", userService.GetCredentialsHandler)
+			r.Post("/credentials", userService.SaveCredentialHandler)
+			r.Delete("/credentials", userService.DeleteCredentialHandler)
+
 			// Admin-only user management
 			r.Group(func(r chi.Router) {
 				r.Use(authService.RequireRole("admin"))
