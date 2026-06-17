@@ -34,6 +34,20 @@ func main() {
 	}
 	defer database.Close()
 
+	// Auto-migrate
+	if err := database.RunMigrations(context.Background(), "./migrations"); err != nil {
+		slog.Error("migration failed", "error", err)
+	}
+
+	// Seed admin
+	adminEmail := os.Getenv("ADMIN_EMAIL")
+	adminPassword := os.Getenv("ADMIN_PASSWORD")
+	if adminEmail != "" && adminPassword != "" {
+		if err := database.SeedAdmin(context.Background(), adminEmail, adminPassword); err != nil {
+			slog.Error("seed admin failed", "error", err)
+		}
+	}
+
 	// Redis
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: parseRedisURL(os.Getenv("REDIS_URL")),
