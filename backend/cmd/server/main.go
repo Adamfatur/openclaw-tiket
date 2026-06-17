@@ -113,6 +113,17 @@ func main() {
 			r.Post("/credentials", userService.SaveCredentialHandler)
 			r.Delete("/credentials", userService.DeleteCredentialHandler)
 
+			// Saved Guests
+			r.Get("/guests", userService.ListGuestsHandler)
+			r.Post("/guests", userService.CreateGuestHandler)
+			r.Put("/guests/{id}", userService.UpdateGuestHandler)
+			r.Delete("/guests/{id}", userService.DeleteGuestHandler)
+
+			// Payment Methods
+			r.Get("/payment-methods", userService.ListPaymentMethodsHandler)
+			r.Post("/payment-methods", userService.SavePaymentMethodHandler)
+			r.Delete("/payment-methods", userService.DeletePaymentMethodHandler)
+
 			// Admin-only user management
 			r.Group(func(r chi.Router) {
 				r.Use(authService.RequireRole("admin"))
