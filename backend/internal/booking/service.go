@@ -2,9 +2,9 @@ package booking
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/Adamfatur/openclaw-tiket/backend/internal/auth"
 	"github.com/Adamfatur/openclaw-tiket/backend/internal/db"
@@ -22,29 +22,27 @@ type Service struct {
 }
 
 type CreateBookingRequest struct {
-	Origin        string          `json:"origin"`
-	Destination   string          `json:"destination"`
-	DepartureDate string          `json:"departure_date"`
-	ReturnDate    *string         `json:"return_date,omitempty"`
-	Passengers    json.RawMessage `json:"passengers"`
-	Preferences   json.RawMessage `json:"preferences,omitempty"`
+	EventName      string `json:"event_name"`
+	EventURL       string `json:"event_url"`
+	TicketCategory string `json:"ticket_category"`
+	Quantity       int    `json:"quantity"`
+	Notes          string `json:"notes,omitempty"`
 }
 
 type Booking struct {
-	ID            string          `json:"id"`
-	UserID        string          `json:"user_id"`
-	Status        string          `json:"status"`
-	Platform      string          `json:"platform"`
-	Origin        string          `json:"origin"`
-	Destination   string          `json:"destination"`
-	DepartureDate string          `json:"departure_date"`
-	ReturnDate    *string         `json:"return_date,omitempty"`
-	Passengers    json.RawMessage `json:"passengers"`
-	Preferences   json.RawMessage `json:"preferences,omitempty"`
-	Result        json.RawMessage `json:"result,omitempty"`
-	QueuePosition *int            `json:"queue_position,omitempty"`
-	CreatedAt     string          `json:"created_at"`
-	UpdatedAt     string          `json:"updated_at"`
+	ID             string          `json:"id"`
+	UserID         string          `json:"user_id"`
+	Status         string          `json:"status"`
+	Platform       string          `json:"platform"`
+	EventName      string          `json:"event_name"`
+	EventURL       string          `json:"event_url"`
+	TicketCategory string          `json:"ticket_category"`
+	Quantity       int             `json:"quantity"`
+	Notes          *string         `json:"notes,omitempty"`
+	Result         json.RawMessage `json:"result,omitempty"`
+	QueuePosition  *int            `json:"queue_position,omitempty"`
+	CreatedAt      string          `json:"created_at"`
+	UpdatedAt      string          `json:"updated_at"`
 }
 
 func NewService(database *db.DB, redisClient *redis.Client, poolMgr *pool.Manager, hub *ws.Hub) *Service {
@@ -69,24 +67,21 @@ func (s *Service) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate required fields
-	if req.Origin == "" || req.Destination == "" || req.DepartureDate == "" {
-		http.Error(w, `{"error":"origin, destination, and departure_date are required"}`, http.StatusBadRequest)
+	if req.EventName == "" || req.EventURL == "" || req.TicketCategory == "" {
+		http.Error(w, `{"error":"event_name, event_url, and ticket_category are required"}`, http.StatusBadRequest)
 		return
 	}
 
-	// Parse date
-	if _, err := time.Parse("2006-01-02", req.DepartureDate); err != nil {
-		http.Error(w, `{"error":"invalid departure_date format, use YYYY-MM-DD"}`, http.StatusBadRequest)
+	if req.Quantity < 1 || req.Quantity > 4 {
+		http.Error(w, `{"error":"quantity must be between 1 and 4"}`, http.StatusBadRequest)
 		return
 	}
 
-	// Insert booking
 	var bookingID string
 	err := s.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO bookings (user_id, status, platform, origin, destination, departure_date, return_date, passengers, preferences)
-		 VALUES ($1, 'queued', 'tiket.com', $2, $3, $4, $5, $6, $7) RETURNING id`,
-		claims.UserID, req.Origin, req.Destination, req.DepartureDate, req.ReturnDate, req.Passengers, req.Preferences,
+		`INSERT INTO bookings (user_id, status, platform, event_name, event_url, ticket_category, quantity, notes)
+		 VALUES ($1, 'queued', 'tiket.com', $2, $3, $4, $5, $6) RETURNING id`,
+		claims.UserID, req.EventName, req.EventURL, req.TicketCategory, req.Quantity, req.Notes,
 	).Scan(&bookingID)
 	if err != nil {
 		slog.Error("create booking failed", "error", err)
@@ -94,26 +89,21 @@ func (s *Service) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Try to assign a slot
 	slotNumber, assigned := s.pool.Assign(claims.UserID, bookingID)
 
 	if assigned {
-		// Update status to in_progress
 		s.db.Pool.Exec(r.Context(),
 			`UPDATE bookings SET status = 'in_progress', updated_at = NOW() WHERE id = $1`, bookingID)
 
-		// TODO: trigger OpenClaw container to start booking
 		slog.Info("booking assigned to slot", "booking_id", bookingID, "slot", slotNumber)
 
-		// Notify via WebSocket
 		s.hub.SendToUser(claims.UserID, ws.Message{
 			Type:      "booking_update",
 			BookingID: bookingID,
 			Status:    "in_progress",
-			Message:   "Booking sedang diproses",
+			Message:   "Booking sedang diproses oleh agent",
 		})
 	} else {
-		// Update queue position
 		queuePos := s.pool.QueuePosition(bookingID)
 		s.db.Pool.Exec(r.Context(),
 			`UPDATE bookings SET queue_position = $1, updated_at = NOW() WHERE id = $2`, queuePos, bookingID)
@@ -122,16 +112,16 @@ func (s *Service) CreateHandler(w http.ResponseWriter, r *http.Request) {
 			Type:      "booking_update",
 			BookingID: bookingID,
 			Status:    "queued",
-			Message:   "Dalam antrian, posisi ke-" + string(rune('0'+queuePos)),
+			Message:   fmt.Sprintf("Dalam antrian, posisi ke-%d", queuePos),
 		})
 	}
 
-	// Audit log
+	// Audit
 	s.db.Pool.Exec(r.Context(),
 		`INSERT INTO audit_logs (user_id, action, resource, details, ip_address)
 		 VALUES ($1, 'booking:create', $2, $3, $4)`,
 		claims.UserID, bookingID,
-		json.RawMessage(`{"origin":"`+req.Origin+`","destination":"`+req.Destination+`"}`),
+		json.RawMessage(`{"event":"`+req.EventName+`","category":"`+req.TicketCategory+`"}`),
 		r.RemoteAddr)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -150,12 +140,10 @@ func (s *Service) ListHandler(w http.ResponseWriter, r *http.Request) {
 	var query string
 	var args []interface{}
 	if claims.Role == "admin" {
-		query = `SELECT id, user_id, status, platform, origin, destination, 
-				 departure_date::text, passengers, result, created_at::text, updated_at::text 
+		query = `SELECT id, user_id, status, platform, event_name, event_url, ticket_category, quantity, result, created_at::text, updated_at::text 
 				 FROM bookings ORDER BY created_at DESC LIMIT 50`
 	} else {
-		query = `SELECT id, user_id, status, platform, origin, destination, 
-				 departure_date::text, passengers, result, created_at::text, updated_at::text 
+		query = `SELECT id, user_id, status, platform, event_name, event_url, ticket_category, quantity, result, created_at::text, updated_at::text 
 				 FROM bookings WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`
 		args = append(args, claims.UserID)
 	}
@@ -170,8 +158,8 @@ func (s *Service) ListHandler(w http.ResponseWriter, r *http.Request) {
 	bookings := make([]Booking, 0)
 	for rows.Next() {
 		var b Booking
-		if err := rows.Scan(&b.ID, &b.UserID, &b.Status, &b.Platform, &b.Origin,
-			&b.Destination, &b.DepartureDate, &b.Passengers, &b.Result, &b.CreatedAt, &b.UpdatedAt); err != nil {
+		if err := rows.Scan(&b.ID, &b.UserID, &b.Status, &b.Platform, &b.EventName,
+			&b.EventURL, &b.TicketCategory, &b.Quantity, &b.Result, &b.CreatedAt, &b.UpdatedAt); err != nil {
 			continue
 		}
 		bookings = append(bookings, b)
@@ -187,17 +175,15 @@ func (s *Service) GetHandler(w http.ResponseWriter, r *http.Request) {
 
 	var b Booking
 	err := s.db.Pool.QueryRow(r.Context(),
-		`SELECT id, user_id, status, platform, origin, destination,
-		 departure_date::text, passengers, preferences, result, created_at::text, updated_at::text
+		`SELECT id, user_id, status, platform, event_name, event_url, ticket_category, quantity, notes, result, created_at::text, updated_at::text
 		 FROM bookings WHERE id = $1`, id).
-		Scan(&b.ID, &b.UserID, &b.Status, &b.Platform, &b.Origin, &b.Destination,
-			&b.DepartureDate, &b.Passengers, &b.Preferences, &b.Result, &b.CreatedAt, &b.UpdatedAt)
+		Scan(&b.ID, &b.UserID, &b.Status, &b.Platform, &b.EventName, &b.EventURL,
+			&b.TicketCategory, &b.Quantity, &b.Notes, &b.Result, &b.CreatedAt, &b.UpdatedAt)
 	if err != nil {
 		http.Error(w, `{"error":"booking not found"}`, http.StatusNotFound)
 		return
 	}
 
-	// Check permission
 	if claims.Role != "admin" && b.UserID != claims.UserID {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
@@ -211,7 +197,6 @@ func (s *Service) ConfirmHandler(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r.Context())
 	id := chi.URLParam(r, "id")
 
-	// Verify booking belongs to user and is awaiting confirmation
 	var userID, status string
 	err := s.db.Pool.QueryRow(r.Context(),
 		`SELECT user_id, status FROM bookings WHERE id = $1`, id).Scan(&userID, &status)
@@ -230,11 +215,8 @@ func (s *Service) ConfirmHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update status
 	s.db.Pool.Exec(r.Context(),
 		`UPDATE bookings SET status = 'confirmed', updated_at = NOW() WHERE id = $1`, id)
-
-	// TODO: signal OpenClaw container to proceed with payment
 
 	s.hub.SendToUser(claims.UserID, ws.Message{
 		Type:      "booking_update",
@@ -272,7 +254,6 @@ func (s *Service) CancelHandler(w http.ResponseWriter, r *http.Request) {
 	s.db.Pool.Exec(r.Context(),
 		`UPDATE bookings SET status = 'cancelled', updated_at = NOW() WHERE id = $1`, id)
 
-	// Audit
 	s.db.Pool.Exec(r.Context(),
 		`INSERT INTO audit_logs (user_id, action, resource) VALUES ($1, 'booking:cancel', $2)`,
 		claims.UserID, id)
@@ -282,12 +263,12 @@ func (s *Service) CancelHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) ClawCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	var callback struct {
-		BookingID string          `json:"booking_id"`
-		SlotNumber int            `json:"slot_number"`
-		Status    string          `json:"status"`
-		Step      int             `json:"step"`
-		Message   string          `json:"message"`
-		Result    json.RawMessage `json:"result,omitempty"`
+		BookingID  string          `json:"booking_id"`
+		SlotNumber int             `json:"slot_number"`
+		Status     string          `json:"status"`
+		Step       int             `json:"step"`
+		Message    string          `json:"message"`
+		Result     json.RawMessage `json:"result,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&callback); err != nil {
@@ -297,21 +278,18 @@ func (s *Service) ClawCallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("claw callback", "booking_id", callback.BookingID, "status", callback.Status, "step", callback.Step)
 
-	// Update booking status
 	if callback.Status != "" {
 		s.db.Pool.Exec(r.Context(),
 			`UPDATE bookings SET status = $1, updated_at = NOW() WHERE id = $2`,
 			callback.Status, callback.BookingID)
 	}
 
-	// Save result if completed
 	if callback.Result != nil {
 		s.db.Pool.Exec(r.Context(),
 			`UPDATE bookings SET result = $1, updated_at = NOW() WHERE id = $2`,
 			callback.Result, callback.BookingID)
 	}
 
-	// Log step
 	if callback.Step > 0 {
 		s.db.Pool.Exec(r.Context(),
 			`INSERT INTO booking_steps (booking_id, step_number, action, message, status)
@@ -319,7 +297,6 @@ func (s *Service) ClawCallbackHandler(w http.ResponseWriter, r *http.Request) {
 			callback.BookingID, callback.Step, callback.Status, callback.Message)
 	}
 
-	// Get user ID for WebSocket notification
 	var userID string
 	s.db.Pool.QueryRow(r.Context(),
 		`SELECT user_id FROM bookings WHERE id = $1`, callback.BookingID).Scan(&userID)
@@ -334,13 +311,10 @@ func (s *Service) ClawCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// Release slot if terminal state
 	if callback.Status == "completed" || callback.Status == "failed" {
 		next := s.pool.Release(callback.SlotNumber)
 		if next != nil {
-			// Assign next in queue
 			slog.Info("assigning queued booking", "booking_id", next.BookingID)
-			// TODO: trigger next booking
 		}
 	}
 

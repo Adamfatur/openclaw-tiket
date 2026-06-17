@@ -1,19 +1,18 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import { Link2, Users, Tag, Ticket, ArrowRight, Info } from 'lucide-react'
 import api from '../api/client'
 
 export default function NewBooking() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
-    origin: '',
-    destination: '',
-    departure_date: '',
-    return_date: '',
-    passenger_name: '',
-    passenger_id: '',
-    sort_by: 'price',
-    class: 'economy',
+    event_name: '',
+    event_url: '',
+    ticket_category: '',
+    quantity: 1,
+    notes: '',
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -22,23 +21,12 @@ export default function NewBooking() {
 
     try {
       const { data } = await api.post('/bookings', {
-        origin: form.origin,
-        destination: form.destination,
-        departure_date: form.departure_date,
-        return_date: form.return_date || null,
-        passengers: [
-          {
-            name: form.passenger_name,
-            id_number: form.passenger_id,
-            type: 'adult',
-          },
-        ],
-        preferences: {
-          sort_by: form.sort_by,
-          class: form.class,
-        },
+        event_name: form.event_name,
+        event_url: form.event_url,
+        ticket_category: form.ticket_category,
+        quantity: form.quantity,
+        notes: form.notes,
       })
-
       navigate(`/bookings/${data.id}`)
     } catch {
       alert('Gagal membuat booking')
@@ -47,145 +35,149 @@ export default function NewBooking() {
     }
   }
 
+  // Auto-detect event name from URL
+  const handleUrlChange = (url: string) => {
+    setForm({ ...form, event_url: url })
+    // Try to extract event name from tiket.com URL
+    const match = url.match(/to-do\/([^?]+)/)
+    if (match) {
+      const name = match[1].replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+      setForm((prev) => ({ ...prev, event_url: url, event_name: prev.event_name || name }))
+    }
+  }
+
   return (
-    <div className="max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-        Pesan Tiket Baru
-      </h1>
-
-      <form onSubmit={handleSubmit} className="space-y-6 bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-        {/* Route */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Asal (kode bandara)
-            </label>
-            <input
-              type="text"
-              value={form.origin}
-              onChange={(e) => setForm({ ...form, origin: e.target.value.toUpperCase() })}
-              placeholder="CGK"
-              required
-              maxLength={3}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Tujuan (kode bandara)
-            </label>
-            <input
-              type="text"
-              value={form.destination}
-              onChange={(e) => setForm({ ...form, destination: e.target.value.toUpperCase() })}
-              placeholder="DPS"
-              required
-              maxLength={3}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-          </div>
-        </div>
-
-        {/* Dates */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Tanggal Berangkat
-            </label>
-            <input
-              type="date"
-              value={form.departure_date}
-              onChange={(e) => setForm({ ...form, departure_date: e.target.value })}
-              required
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Tanggal Pulang (opsional)
-            </label>
-            <input
-              type="date"
-              value={form.return_date}
-              onChange={(e) => setForm({ ...form, return_date: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-          </div>
-        </div>
-
-        {/* Passenger */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Nama Penumpang
-            </label>
-            <input
-              type="text"
-              value={form.passenger_name}
-              onChange={(e) => setForm({ ...form, passenger_name: e.target.value })}
-              placeholder="Sesuai KTP/Paspor"
-              required
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              No. KTP/Paspor
-            </label>
-            <input
-              type="text"
-              value={form.passenger_id}
-              onChange={(e) => setForm({ ...form, passenger_id: e.target.value })}
-              placeholder="3201..."
-              required
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-          </div>
-        </div>
-
-        {/* Preferences */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Urutkan berdasarkan
-            </label>
-            <select
-              value={form.sort_by}
-              onChange={(e) => setForm({ ...form, sort_by: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            >
-              <option value="price">Harga Termurah</option>
-              <option value="departure">Keberangkatan Paling Awal</option>
-              <option value="duration">Durasi Tercepat</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Kelas
-            </label>
-            <select
-              value={form.class}
-              onChange={(e) => setForm({ ...form, class: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            >
-              <option value="economy">Ekonomi</option>
-              <option value="business">Bisnis</option>
-            </select>
-          </div>
-        </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full py-3 px-4 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition disabled:opacity-50"
-        >
-          {loading ? 'Memproses...' : '🦞 Pesan via OpenClaw'}
-        </button>
-
-        <p className="text-xs text-gray-500 text-center">
-          OpenClaw akan mencari tiket di tiket.com dan meminta konfirmasi sebelum pembayaran.
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="max-w-xl mx-auto"
+    >
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold text-text-primary">Pesan Tiket Event</h1>
+        <p className="text-sm text-text-tertiary mt-1">
+          AI agent akan membuka tiket.com dan melakukan pemesanan untuk kamu
         </p>
-      </form>
-    </div>
+      </div>
+
+      <div className="card p-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Event URL */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-text-secondary flex items-center gap-1.5">
+              <Link2 className="w-3.5 h-3.5" />
+              URL Event di tiket.com
+            </label>
+            <input
+              type="url"
+              value={form.event_url}
+              onChange={(e) => handleUrlChange(e.target.value)}
+              placeholder="https://www.tiket.com/id-id/to-do/..."
+              required
+              className="input-field"
+            />
+            <p className="text-xs text-text-tertiary flex items-center gap-1">
+              <Info className="w-3 h-3" />
+              Paste link event dari tiket.com
+            </p>
+          </div>
+
+          {/* Event Name */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-text-secondary flex items-center gap-1.5">
+              <Ticket className="w-3.5 h-3.5" />
+              Nama Event
+            </label>
+            <input
+              type="text"
+              value={form.event_name}
+              onChange={(e) => setForm({ ...form, event_name: e.target.value })}
+              placeholder="My Chemical Romance Live in Jakarta 2026"
+              required
+              className="input-field"
+            />
+          </div>
+
+          {/* Category & Quantity */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-text-secondary flex items-center gap-1.5">
+                <Tag className="w-3.5 h-3.5" />
+                Kategori Tiket
+              </label>
+              <select
+                value={form.ticket_category}
+                onChange={(e) => setForm({ ...form, ticket_category: e.target.value })}
+                required
+                className="input-field"
+              >
+                <option value="">Pilih kategori</option>
+                <option value="CAT 1">CAT 1 (Terdekat)</option>
+                <option value="CAT 2">CAT 2</option>
+                <option value="CAT 3">CAT 3</option>
+                <option value="CAT 4">CAT 4</option>
+                <option value="Festival">Festival (Standing)</option>
+                <option value="VIP">VIP</option>
+                <option value="Cheapest">Termurah (Auto)</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-text-secondary flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5" />
+                Jumlah Tiket
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={4}
+                value={form.quantity}
+                onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) })}
+                required
+                className="input-field"
+              />
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-text-secondary">
+              Catatan tambahan (opsional)
+            </label>
+            <textarea
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              placeholder="Prefer seating dekat stage, budget max 2jt, dll..."
+              rows={3}
+              className="input-field resize-none"
+            />
+          </div>
+
+          {/* Submit */}
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn-primary w-full flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
+              />
+            ) : (
+              <>
+                Mulai Booking
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
+          </button>
+
+          <p className="text-xs text-text-tertiary text-center">
+            Agent akan mencari tiket dan meminta konfirmasi sebelum pembayaran
+          </p>
+        </form>
+      </div>
+    </motion.div>
   )
 }

@@ -1,0 +1,100 @@
+name: tiket-event-booking
+description: Automate event ticket booking on tiket.com
+version: 1.0.0
+
+triggers:
+  - command: book_event_ticket
+
+input_schema:
+  type: object
+  required: [event_url, ticket_category, quantity]
+  properties:
+    event_url:
+      type: string
+      description: Full URL of the event on tiket.com
+    event_name:
+      type: string
+      description: Name of the event
+    ticket_category:
+      type: string
+      description: Ticket category to purchase (CAT 1, CAT 2, VIP, Festival, Cheapest)
+    quantity:
+      type: integer
+      minimum: 1
+      maximum: 4
+      description: Number of tickets to purchase
+    notes:
+      type: string
+      description: Additional preferences or instructions
+
+steps:
+  - name: navigate_to_event
+    action: browser.goto
+    params:
+      url: "{{event_url}}"
+    on_error: retry_3x
+
+  - name: wait_for_page
+    action: browser.wait_for_selector
+    params:
+      selector: "[data-testid='ticket-section'], .ticket-category, .product-detail"
+      timeout: 15000
+
+  - name: select_ticket_category
+    action: browser.click
+    params:
+      selector: "auto_detect_category({{ticket_category}})"
+    description: Find and click the matching ticket category
+
+  - name: set_quantity
+    action: browser.fill_quantity
+    params:
+      quantity: "{{quantity}}"
+
+  - name: capture_summary
+    action: browser.screenshot
+    params:
+      name: "ticket-selection-{{booking_id}}"
+
+  - name: report_and_pause
+    action: callback
+    params:
+      status: awaiting_confirmation
+      message: "Tiket ditemukan. Kategori: {{ticket_category}}, Qty: {{quantity}}"
+      step: 5
+
+  - name: wait_for_confirmation
+    action: wait_signal
+    params:
+      signal: user_confirmed
+      timeout: 300  # 5 minutes
+
+  - name: proceed_to_checkout
+    action: browser.click
+    params:
+      selector: "[data-testid='buy-button'], .btn-checkout, button:has-text('Beli')"
+
+  - name: fill_contact_info
+    action: browser.fill_form
+    params:
+      auto_fill: true
+    description: Fill required contact/attendee information
+
+  - name: capture_checkout
+    action: browser.screenshot
+    params:
+      name: "checkout-{{booking_id}}"
+
+  - name: complete
+    action: callback
+    params:
+      status: completed
+      message: "Booking berhasil"
+      step: 10
+
+safety_rules:
+  - NEVER auto-confirm payment without user signal
+  - ALWAYS capture screenshots before and after actions
+  - ALWAYS respect 10-minute session timeout
+  - NEVER store payment credentials
+  - LOG every browser action for audit

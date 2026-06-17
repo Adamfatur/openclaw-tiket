@@ -1,21 +1,33 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import { Cpu, Clock, Users, Plus, ExternalLink, Calendar, MapPin, Ticket } from 'lucide-react'
 import api from '../api/client'
 
 interface PoolStatus {
   total: number
   active: number
   queue_length: number
-  slots: { number: number; status: string; user_id?: string }[]
+  slots: { number: number; status: string }[]
 }
 
 interface Booking {
   id: string
   status: string
-  origin: string
-  destination: string
-  departure_date: string
+  event_name: string
+  event_url: string
+  quantity: number
   created_at: string
+}
+
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.08 } },
+}
+
+const item = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0 },
 }
 
 export default function Dashboard() {
@@ -24,115 +36,145 @@ export default function Dashboard() {
 
   useEffect(() => {
     api.get('/pool/status').then(({ data }) => setPool(data))
-    api.get('/bookings').then(({ data }) => setBookings(data))
+    api.get('/bookings').then(({ data }) => setBookings(data)).catch(() => {})
   }, [])
 
-  const statusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      queued: 'bg-yellow-100 text-yellow-800',
-      in_progress: 'bg-blue-100 text-blue-800',
-      awaiting_confirmation: 'bg-purple-100 text-purple-800',
-      completed: 'bg-green-100 text-green-800',
-      failed: 'bg-red-100 text-red-800',
-      cancelled: 'bg-gray-100 text-gray-800',
-    }
-    return colors[status] || 'bg-gray-100 text-gray-800'
+  const statusConfig: Record<string, { label: string; color: string }> = {
+    queued: { label: 'Dalam Antrian', color: 'bg-amber-50 text-amber-700 border-amber-100' },
+    in_progress: { label: 'Sedang Proses', color: 'bg-blue-50 text-blue-700 border-blue-100' },
+    awaiting_confirmation: { label: 'Menunggu Konfirmasi', color: 'bg-purple-50 text-purple-700 border-purple-100' },
+    completed: { label: 'Selesai', color: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+    failed: { label: 'Gagal', color: 'bg-red-50 text-red-700 border-red-100' },
+    cancelled: { label: 'Dibatalkan', color: 'bg-sand-100 text-text-tertiary border-sand-200' },
   }
 
   return (
-    <div className="space-y-8">
-      {/* Pool Status */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-          <h3 className="text-sm font-medium text-gray-500">Slot Tersedia</h3>
-          <p className="text-3xl font-bold text-green-600">
-            {pool ? pool.total - pool.active : '-'} / {pool?.total || 3}
-          </p>
+    <motion.div variants={container} initial="hidden" animate="show" className="space-y-8">
+      {/* Header */}
+      <motion.div variants={item} className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-text-primary">Dashboard</h1>
+          <p className="text-sm text-text-tertiary mt-1">Monitor booking dan status agent</p>
         </div>
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-          <h3 className="text-sm font-medium text-gray-500">Sedang Proses</h3>
-          <p className="text-3xl font-bold text-blue-600">{pool?.active || 0}</p>
-        </div>
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-          <h3 className="text-sm font-medium text-gray-500">Dalam Antrian</h3>
-          <p className="text-3xl font-bold text-yellow-600">{pool?.queue_length || 0}</p>
-        </div>
-      </div>
+        <Link to="/book" className="btn-primary flex items-center gap-2">
+          <Plus className="w-4 h-4" />
+          <span className="hidden sm:inline">Pesan Tiket</span>
+        </Link>
+      </motion.div>
 
-      {/* Slots */}
-      {pool && (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">OpenClaw Slots</h2>
-          <div className="grid grid-cols-3 gap-4">
-            {pool.slots.map((slot) => (
-              <div
-                key={slot.number}
-                className={`p-4 rounded-lg border-2 ${
-                  slot.status === 'idle'
-                    ? 'border-green-300 bg-green-50'
-                    : 'border-blue-300 bg-blue-50'
-                }`}
-              >
-                <div className="font-medium">Slot {slot.number}</div>
-                <div className="text-sm capitalize">{slot.status}</div>
-              </div>
-            ))}
+      {/* Stats */}
+      <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="card p-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
+              <Cpu className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-sm text-text-tertiary">Slot Tersedia</p>
+              <p className="text-2xl font-semibold text-text-primary">
+                {pool ? pool.total - pool.active : '-'}<span className="text-sm text-text-tertiary font-normal"> / {pool?.total || 3}</span>
+              </p>
+            </div>
           </div>
         </div>
+
+        <div className="card p-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+              <Clock className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm text-text-tertiary">Sedang Proses</p>
+              <p className="text-2xl font-semibold text-text-primary">{pool?.active || 0}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="card p-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
+              <Users className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-sm text-text-tertiary">Dalam Antrian</p>
+              <p className="text-2xl font-semibold text-text-primary">{pool?.queue_length || 0}</p>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Agent Slots */}
+      {pool && (
+        <motion.div variants={item} className="card p-5">
+          <h2 className="text-sm font-medium text-text-secondary mb-4">Agent Slots</h2>
+          <div className="grid grid-cols-3 gap-3">
+            {pool.slots.map((slot) => (
+              <motion.div
+                key={slot.number}
+                whileHover={{ scale: 1.02 }}
+                className={`p-4 rounded-xl border transition-colors ${
+                  slot.status === 'idle'
+                    ? 'border-emerald-200 bg-emerald-50/50'
+                    : 'border-blue-200 bg-blue-50/50'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${
+                    slot.status === 'idle' ? 'bg-emerald-500' : 'bg-blue-500 animate-pulse'
+                  }`} />
+                  <span className="text-sm font-medium text-text-primary">Agent {slot.number}</span>
+                </div>
+                <p className="text-xs text-text-tertiary mt-1 capitalize">{slot.status}</p>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
       )}
 
-      {/* Quick Action */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Booking Terbaru</h2>
-        <Link
-          to="/book"
-          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition"
-        >
-          + Pesan Tiket Baru
-        </Link>
-      </div>
-
-      {/* Bookings Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50 dark:bg-gray-700">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rute</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-            {bookings.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
-                  Belum ada booking. <Link to="/book" className="text-primary-600 hover:underline">Pesan sekarang</Link>
-                </td>
-              </tr>
-            ) : (
-              bookings.map((b) => (
-                <tr key={b.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                  <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">
-                    {b.origin} → {b.destination}
-                  </td>
-                  <td className="px-6 py-4 text-gray-600 dark:text-gray-300">{b.departure_date}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColor(b.status)}`}>
-                      {b.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <Link to={`/bookings/${b.id}`} className="text-primary-600 hover:underline text-sm">
-                      Detail
-                    </Link>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
+      {/* Recent Bookings */}
+      <motion.div variants={item} className="card overflow-hidden">
+        <div className="p-5 border-b border-sand-100">
+          <h2 className="text-sm font-medium text-text-secondary">Booking Terbaru</h2>
+        </div>
+        <div className="divide-y divide-sand-100">
+          {bookings.length === 0 ? (
+            <div className="p-8 text-center">
+              <Ticket className="w-10 h-10 text-sand-300 mx-auto mb-3" />
+              <p className="text-sm text-text-tertiary">
+                Belum ada booking.{' '}
+                <Link to="/book" className="text-accent hover:underline">
+                  Pesan sekarang
+                </Link>
+              </p>
+            </div>
+          ) : (
+            bookings.slice(0, 5).map((b) => (
+              <Link
+                key={b.id}
+                to={`/bookings/${b.id}`}
+                className="flex items-center gap-4 px-5 py-4 hover:bg-sand-50 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-xl bg-sand-100 flex items-center justify-center flex-shrink-0">
+                  <Calendar className="w-5 h-5 text-text-tertiary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-text-primary truncate">
+                    {b.event_name || 'Event Booking'}
+                  </p>
+                  <p className="text-xs text-text-tertiary flex items-center gap-1 mt-0.5">
+                    <MapPin className="w-3 h-3" />
+                    tiket.com
+                  </p>
+                </div>
+                <div className={`badge border ${statusConfig[b.status]?.color || 'bg-sand-100 text-text-tertiary'}`}>
+                  {statusConfig[b.status]?.label || b.status}
+                </div>
+                <ExternalLink className="w-4 h-4 text-sand-400" />
+              </Link>
+            ))
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
   )
 }

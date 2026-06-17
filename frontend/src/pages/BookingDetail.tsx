@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
+import { CheckCircle2, Circle, Loader2, XCircle, ExternalLink, CreditCard } from 'lucide-react'
 import api from '../api/client'
 
 interface BookingStep {
@@ -7,23 +9,19 @@ interface BookingStep {
   action: string
   message: string
   status: string
-  created_at: string
 }
 
 interface Booking {
   id: string
   status: string
-  origin: string
-  destination: string
-  departure_date: string
-  passengers: { name: string; type: string }[]
+  event_name: string
+  event_url: string
+  ticket_category: string
+  quantity: number
   result?: {
     booking_code?: string
     total_price?: number
-    flight_details?: {
-      airline: string
-      flight_number: string
-    }
+    ticket_details?: string
   }
   created_at: string
 }
@@ -36,20 +34,23 @@ export default function BookingDetail() {
 
   useEffect(() => {
     if (!id) return
-    api.get(`/bookings/${id}`).then(({ data }) => setBooking(data))
+    api.get(`/bookings/${id}`).then(({ data }) => setBooking(data)).catch(() => {})
 
-    // WebSocket for real-time updates
-    const token = localStorage.getItem('auth-storage')
-    const ws = new WebSocket(
-      `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/ws?user_id=${JSON.parse(token || '{}')?.state?.user?.id || ''}`
-    )
+    // WebSocket
+    const stored = localStorage.getItem('auth-storage')
+    const userId = stored ? JSON.parse(stored)?.state?.user?.id : ''
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const ws = new WebSocket(`${proto}//${window.location.host}/api/ws?user_id=${userId}`)
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data)
       if (msg.booking_id === id) {
-        setBooking((prev) => prev ? { ...prev, status: msg.status } : prev)
+        setBooking((prev) => (prev ? { ...prev, status: msg.status } : prev))
         if (msg.step) {
-          setSteps((prev) => [...prev, { step_number: msg.step, action: msg.status, message: msg.message, status: 'completed', created_at: new Date().toISOString() }])
+          setSteps((prev) => [
+            ...prev,
+            { step_number: msg.step, action: msg.status, message: msg.message, status: 'completed' },
+          ])
         }
       }
     }
@@ -61,7 +62,7 @@ export default function BookingDetail() {
     setConfirming(true)
     try {
       await api.post(`/bookings/${id}/confirm`)
-      setBooking((prev) => prev ? { ...prev, status: 'confirmed' } : prev)
+      setBooking((prev) => (prev ? { ...prev, status: 'confirmed' } : prev))
     } catch {
       alert('Gagal konfirmasi')
     } finally {
@@ -69,80 +70,154 @@ export default function BookingDetail() {
     }
   }
 
-  if (!booking) return <div className="text-center py-8">Loading...</div>
+  if (!booking) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-6 h-6 text-text-tertiary animate-spin" />
+      </div>
+    )
+  }
+
+  const statusInfo: Record<string, { label: string; color: string }> = {
+    queued: { label: 'Dalam Antrian', color: 'text-amber-600' },
+    in_progress: { label: 'Sedang Diproses', color: 'text-blue-600' },
+    awaiting_confirmation: { label: 'Menunggu Konfirmasi', color: 'text-purple-600' },
+    confirmed: { label: 'Dikonfirmasi', color: 'text-blue-600' },
+    completed: { label: 'Selesai', color: 'text-emerald-600' },
+    failed: { label: 'Gagal', color: 'text-red-600' },
+    cancelled: { label: 'Dibatalkan', color: 'text-text-tertiary' },
+  }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="max-w-2xl mx-auto space-y-6"
+    >
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-        <div className="flex justify-between items-start">
+      <div className="card p-6">
+        <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              {booking.origin} → {booking.destination}
-            </h1>
-            <p className="text-gray-500 mt-1">{booking.departure_date}</p>
+            <h1 className="text-xl font-semibold text-text-primary">{booking.event_name}</h1>
+            <p className="text-sm text-text-tertiary mt-1">
+              {booking.ticket_category} · {booking.quantity} tiket
+            </p>
           </div>
-          <span className={`px-3 py-1 text-sm font-medium rounded-full ${
-            booking.status === 'completed' ? 'bg-green-100 text-green-800' :
-            booking.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-            booking.status === 'awaiting_confirmation' ? 'bg-purple-100 text-purple-800' :
-            'bg-gray-100 text-gray-800'
-          }`}>
-            {booking.status}
+          <span className={`text-sm font-medium ${statusInfo[booking.status]?.color}`}>
+            {statusInfo[booking.status]?.label}
           </span>
         </div>
 
-        {/* Confirm button */}
-        {booking.status === 'awaiting_confirmation' && (
-          <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <p className="text-yellow-800 font-medium mb-2">
-              OpenClaw menemukan tiket dan siap melakukan pembayaran.
-            </p>
-            <button
-              onClick={handleConfirm}
-              disabled={confirming}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium"
-            >
-              {confirming ? 'Mengkonfirmasi...' : 'Konfirmasi & Bayar'}
-            </button>
-          </div>
-        )}
-
-        {/* Result */}
-        {booking.result?.booking_code && (
-          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-            <p className="text-green-800 font-medium">Booking berhasil!</p>
-            <p className="text-green-700">Kode: <strong>{booking.result.booking_code}</strong></p>
-            {booking.result.total_price && (
-              <p className="text-green-700">
-                Total: <strong>Rp {booking.result.total_price.toLocaleString('id-ID')}</strong>
-              </p>
-            )}
-          </div>
+        {booking.event_url && (
+          <a
+            href={booking.event_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs text-accent hover:underline mt-3"
+          >
+            <ExternalLink className="w-3 h-3" />
+            Lihat di tiket.com
+          </a>
         )}
       </div>
 
-      {/* Progress Steps */}
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-        <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Progress</h2>
-        {steps.length === 0 ? (
-          <p className="text-gray-500">Menunggu update dari OpenClaw...</p>
-        ) : (
-          <div className="space-y-3">
-            {steps.map((step, i) => (
-              <div key={i} className="flex items-start space-x-3">
-                <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold">
-                  {step.step_number}
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">{step.message}</p>
-                  <p className="text-xs text-gray-500">{step.action}</p>
-                </div>
+      {/* Confirmation prompt */}
+      <AnimatePresence>
+        {booking.status === 'awaiting_confirmation' && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="card p-6 border-purple-200 bg-purple-50/30"
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0">
+                <CreditCard className="w-5 h-5 text-purple-600" />
               </div>
+              <div className="flex-1">
+                <p className="font-medium text-text-primary">Tiket ditemukan</p>
+                <p className="text-sm text-text-secondary mt-1">
+                  Agent menemukan tiket yang sesuai. Konfirmasi untuk lanjutkan ke pembayaran.
+                </p>
+                <button
+                  onClick={handleConfirm}
+                  disabled={confirming}
+                  className="btn-primary mt-4"
+                >
+                  {confirming ? 'Memproses...' : 'Konfirmasi & Lanjutkan'}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Result */}
+      <AnimatePresence>
+        {booking.result?.booking_code && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="card p-6 border-emerald-200 bg-emerald-50/30"
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              <span className="font-medium text-emerald-800">Booking Berhasil</span>
+            </div>
+            <div className="space-y-2 text-sm">
+              <p className="text-text-secondary">
+                Kode Booking: <span className="font-mono font-semibold text-text-primary">{booking.result.booking_code}</span>
+              </p>
+              {booking.result.total_price && (
+                <p className="text-text-secondary">
+                  Total: <span className="font-semibold text-text-primary">Rp {booking.result.total_price.toLocaleString('id-ID')}</span>
+                </p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Progress Steps */}
+      <div className="card p-6">
+        <h2 className="text-sm font-medium text-text-secondary mb-4">Progress</h2>
+        {steps.length === 0 ? (
+          <div className="flex items-center gap-3 text-sm text-text-tertiary py-4">
+            {booking.status === 'queued' ? (
+              <Circle className="w-4 h-4" />
+            ) : (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            )}
+            <span>
+              {booking.status === 'queued'
+                ? 'Menunggu slot agent tersedia...'
+                : 'Menunggu update dari agent...'}
+            </span>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {steps.map((step, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.05 }}
+                className="flex items-start gap-3"
+              >
+                {step.status === 'completed' ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+                ) : (
+                  <XCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                )}
+                <div>
+                  <p className="text-sm text-text-primary">{step.message}</p>
+                  <p className="text-xs text-text-tertiary mt-0.5">Step {step.step_number}</p>
+                </div>
+              </motion.div>
             ))}
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   )
 }

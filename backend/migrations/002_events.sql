@@ -1,0 +1,13 @@
+-- Migrate bookings from flights to events
+ALTER TABLE bookings DROP COLUMN IF EXISTS origin;
+ALTER TABLE bookings DROP COLUMN IF EXISTS destination;
+ALTER TABLE bookings DROP COLUMN IF EXISTS departure_date;
+ALTER TABLE bookings DROP COLUMN IF EXISTS return_date;
+ALTER TABLE bookings DROP COLUMN IF EXISTS passengers;
+ALTER TABLE bookings DROP COLUMN IF EXISTS preferences;
+
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS event_name VARCHAR(255);
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS event_url TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS ticket_category VARCHAR(50);
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS quantity INT DEFAULT 1;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS notes TEXT;
