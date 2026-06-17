@@ -1,0 +1,30 @@
+apaaja.pastibisa.app {
+    # API proxy
+    handle /api/* {
+        reverse_proxy api:8080
+    }
+
+    # WebSocket proxy
+    handle /api/ws {
+        reverse_proxy api:8080
+    }
+
+    # Frontend SPA
+    handle {
+        root * /srv/web
+        try_files {path} /index.html
+        file_server
+    }
+
+    # Security headers
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy strict-origin-when-cross-origin
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    }
+
+    # Compression
+    encode gzip zstd
+}

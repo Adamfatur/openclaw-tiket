@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+vendor/
+
+# Build outputs
+frontend/dist/
+backend/server
+*.exe
+
+# Environment
+.env
+.env.local
+.env.production
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes
+pg_data/
+redis_data/
+caddy_data/
+caddy_config/
+
+# Logs
+*.log
+
+# Keys
+*.pem
+*.key
