@@ -1,17 +1,4 @@
 {
-  "models": {
-    "bedrockDiscovery": {
-      "enabled": true,
-      "region": "ap-southeast-3",
-      "providerFilter": ["anthropic"],
-      "refreshInterval": 3600
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": "amazon-bedrock/anthropic.claude-haiku-4-5-20251001-v1:0"
-    }
-  },
   "gateway": {
     "mode": "local"
   },
