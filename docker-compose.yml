@@ -79,7 +79,7 @@ services:
       - AWS_REGION=${AWS_REGION:-ap-southeast-3}
       - OPENCLAW_DISABLE_BONJOUR=1
       - OPENCLAW_SKIP_ONBOARDING=1
-    command: ["node", "openclaw-gateway/dist/index.js", "--allow-unconfigured"]
+    command: ["node", "openclaw.mjs", "gateway", "--allow-unconfigured"]
     deploy:
       resources:
         limits:
@@ -100,7 +100,7 @@ services:
       - AWS_REGION=${AWS_REGION:-ap-southeast-3}
       - OPENCLAW_DISABLE_BONJOUR=1
       - OPENCLAW_SKIP_ONBOARDING=1
-    command: ["node", "openclaw-gateway/dist/index.js", "--allow-unconfigured"]
+    command: ["node", "openclaw.mjs", "gateway", "--allow-unconfigured"]
     deploy:
       resources:
         limits:
@@ -121,7 +121,7 @@ services:
       - AWS_REGION=${AWS_REGION:-ap-southeast-3}
       - OPENCLAW_DISABLE_BONJOUR=1
       - OPENCLAW_SKIP_ONBOARDING=1
-    command: ["node", "openclaw-gateway/dist/index.js", "--allow-unconfigured"]
+    command: ["node", "openclaw.mjs", "gateway", "--allow-unconfigured"]
     deploy:
       resources:
         limits:
