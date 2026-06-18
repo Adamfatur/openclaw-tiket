@@ -87,7 +87,7 @@ services:
     restart: unless-stopped
     environment:
       - SLOT_NUMBER=1
-      - CLAW_MODEL=${CLAW_MODEL:-claude-sonnet-4}
+      - CLAW_MODEL=${CLAW_MODEL:-claude-haiku-4-5}
       - LITELLM_API_KEY=sk-apaaja-pastibisa-2026
       - OPENCLAW_DISABLE_BONJOUR=1
       - OPENCLAW_SKIP_ONBOARDING=1
@@ -110,7 +110,7 @@ services:
     restart: unless-stopped
     environment:
       - SLOT_NUMBER=2
-      - CLAW_MODEL=${CLAW_MODEL:-claude-sonnet-4}
+      - CLAW_MODEL=${CLAW_MODEL:-claude-haiku-4-5}
       - LITELLM_API_KEY=sk-apaaja-pastibisa-2026
       - OPENCLAW_DISABLE_BONJOUR=1
       - OPENCLAW_SKIP_ONBOARDING=1
@@ -133,7 +133,7 @@ services:
     restart: unless-stopped
     environment:
       - SLOT_NUMBER=3
-      - CLAW_MODEL=${CLAW_MODEL:-claude-sonnet-4}
+      - CLAW_MODEL=${CLAW_MODEL:-claude-haiku-4-5}
       - LITELLM_API_KEY=sk-apaaja-pastibisa-2026
       - OPENCLAW_DISABLE_BONJOUR=1
       - OPENCLAW_SKIP_ONBOARDING=1
