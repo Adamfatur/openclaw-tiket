@@ -5,6 +5,8 @@ import {
   Users, Plus, Trash2, CreditCard, Wallet, X, Edit2
 } from 'lucide-react'
 import api from '../api/client'
+import Modal from '../components/Modal'
+import { toast } from '../components/Toast'
 
 interface Profile {
   title: string
@@ -74,6 +76,11 @@ export default function Settings() {
     card_number: '', card_expiry: '', card_cvv: '', card_name: '',
   })
 
+  // --- Modals ---
+  const [disconnectModal, setDisconnectModal] = useState(false)
+  const [deleteGuestModal, setDeleteGuestModal] = useState<string | null>(null)
+  const [deletePaymentModal, setDeletePaymentModal] = useState<string | null>(null)
+
   useEffect(() => {
     api.get('/profile').then(({ data }) => setProfile(data)).catch(() => {})
     api.get('/credentials').then(({ data }) => {
@@ -95,8 +102,9 @@ export default function Settings() {
     try {
       await api.put('/profile', profile)
       setProfileSaved(true)
+      toast.success('Data diri berhasil disimpan')
       setTimeout(() => setProfileSaved(false), 2000)
-    } catch { alert('Gagal menyimpan') }
+    } catch { toast.error('Gagal menyimpan data diri') }
     finally { setSavingProfile(false) }
   }
 
@@ -108,18 +116,20 @@ export default function Settings() {
       await api.post('/credentials', { platform: 'tiket.com', email: tiketEmail, password: tiketPassword })
       setCredsSaved(true)
       setTiketPassword('')
+      toast.success('Akun tiket.com berhasil terhubung')
       setTimeout(() => setCredsSaved(false), 2000)
       const { data } = await api.get('/credentials')
       setCredentials(data)
-    } catch { alert('Gagal menyimpan') }
+    } catch { toast.error('Gagal menyimpan kredensial') }
     finally { setSavingCreds(false) }
   }
 
   const handleDisconnect = async () => {
-    if (!confirm('Putuskan koneksi akun tiket.com?')) return
     await api.delete('/credentials', { data: { platform: 'tiket.com' } })
     setCredentials([])
     setTiketEmail('')
+    setDisconnectModal(false)
+    toast.info('Akun tiket.com terputus')
   }
 
   const handleSaveGuest = async (e: React.FormEvent) => {
@@ -127,19 +137,22 @@ export default function Settings() {
     try {
       if (editingGuest) {
         await api.put(`/guests/${editingGuest.id}`, guestForm)
+        toast.success('Data pengunjung diperbarui')
       } else {
         await api.post('/guests', guestForm)
+        toast.success('Pengunjung baru ditambahkan')
       }
       setShowGuestForm(false)
       setEditingGuest(null)
       setGuestForm({ title: 'Tuan', label: '', full_name: '', phone: '', email: '', id_number: '', nationality: 'Indonesia' })
       loadGuests()
-    } catch { alert('Gagal menyimpan') }
+    } catch { toast.error('Gagal menyimpan data pengunjung') }
   }
 
   const handleDeleteGuest = async (id: string) => {
-    if (!confirm('Hapus data pengunjung ini?')) return
     await api.delete(`/guests/${id}`)
+    setDeleteGuestModal(null)
+    toast.info('Pengunjung dihapus')
     loadGuests()
   }
 
@@ -155,13 +168,15 @@ export default function Settings() {
       await api.post('/payment-methods', paymentForm)
       setShowPaymentForm(false)
       setPaymentForm({ method_type: 'bca_va', label: '', is_default: true, card_number: '', card_expiry: '', card_cvv: '', card_name: '' })
+      toast.success('Metode pembayaran ditambahkan')
       loadPaymentMethods()
-    } catch { alert('Gagal menyimpan') }
+    } catch { toast.error('Gagal menyimpan metode pembayaran') }
   }
 
   const handleDeletePayment = async (id: string) => {
-    if (!confirm('Hapus metode pembayaran ini?')) return
     await api.delete('/payment-methods', { data: { id } })
+    setDeletePaymentModal(null)
+    toast.info('Metode pembayaran dihapus')
     loadPaymentMethods()
   }
 
@@ -270,7 +285,7 @@ export default function Settings() {
               <button onClick={() => handleEditGuest(g)} className="p-1.5 hover:bg-sand-100 rounded-lg transition-colors">
                 <Edit2 className="w-3.5 h-3.5 text-text-tertiary" />
               </button>
-              <button onClick={() => handleDeleteGuest(g.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors">
+              <button onClick={() => setDeleteGuestModal(g.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors">
                 <Trash2 className="w-3.5 h-3.5 text-red-400" />
               </button>
             </motion.div>
@@ -345,7 +360,7 @@ export default function Settings() {
                 {m.card_name && <p className="text-xs text-text-tertiary">{m.card_name}</p>}
               </div>
               {m.is_default && <span className="badge bg-accent/10 text-accent border border-accent/20 text-xs">Default</span>}
-              <button onClick={() => handleDeletePayment(m.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors">
+              <button onClick={() => setDeletePaymentModal(m.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors">
                 <Trash2 className="w-3.5 h-3.5 text-red-400" />
               </button>
             </motion.div>
@@ -424,7 +439,7 @@ export default function Settings() {
                   <p className="text-xs text-emerald-600">{tiketEmail}</p>
                 </div>
               </div>
-              <button type="button" onClick={handleDisconnect} className="flex items-center gap-1.5 text-xs text-red-600 hover:text-red-700 font-medium">
+              <button type="button" onClick={() => setDisconnectModal(true)} className="flex items-center gap-1.5 text-xs text-red-600 hover:text-red-700 font-medium">
                 <Unlink className="w-3.5 h-3.5" /> Putuskan
               </button>
             </motion.div>
@@ -458,6 +473,40 @@ export default function Settings() {
           {credsSaved ? 'Tersimpan' : savingCreds ? 'Menyimpan...' : hasTiketCreds ? 'Update' : 'Hubungkan'}
         </button>
       </form>
+
+      {/* Modals */}
+      <Modal
+        open={disconnectModal}
+        onClose={() => setDisconnectModal(false)}
+        onConfirm={handleDisconnect}
+        title="Putuskan koneksi?"
+        description="Akun tiket.com akan terputus dari sistem. Agent tidak bisa melakukan booking sampai kamu menghubungkan ulang."
+        confirmText="Putuskan"
+        cancelText="Batal"
+        variant="danger"
+      />
+
+      <Modal
+        open={!!deleteGuestModal}
+        onClose={() => setDeleteGuestModal(null)}
+        onConfirm={() => deleteGuestModal && handleDeleteGuest(deleteGuestModal)}
+        title="Hapus pengunjung?"
+        description="Data pengunjung ini akan dihapus permanen dan tidak bisa dikembalikan."
+        confirmText="Hapus"
+        cancelText="Batal"
+        variant="danger"
+      />
+
+      <Modal
+        open={!!deletePaymentModal}
+        onClose={() => setDeletePaymentModal(null)}
+        onConfirm={() => deletePaymentModal && handleDeletePayment(deletePaymentModal)}
+        title="Hapus metode pembayaran?"
+        description="Metode pembayaran ini akan dihapus. Kamu bisa menambahkannya kembali nanti."
+        confirmText="Hapus"
+        cancelText="Batal"
+        variant="warning"
+      />
     </motion.div>
   )
 }

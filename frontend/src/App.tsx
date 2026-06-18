@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/auth'
+import { ToastContainer } from './components/Toast'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import NewBooking from './pages/NewBooking'
@@ -22,7 +23,9 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <Routes>
+    <>
+      <ToastContainer />
+      <Routes>
       <Route path="/login" element={<Login />} />
       <Route
         path="/"
@@ -46,5 +49,6 @@ export default function App() {
         />
       </Route>
     </Routes>
+    </>
   )
 }

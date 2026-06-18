@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { UserPlus, Shield, User, X, Check } from 'lucide-react'
 import api from '../api/client'
+import Modal from '../components/Modal'
+import { toast } from '../components/Toast'
 
 interface UserItem {
   id: string
@@ -17,6 +19,7 @@ export default function Users() {
   const [showCreate, setShowCreate] = useState(false)
   const [newUser, setNewUser] = useState({ email: '', name: '', password: '', role_id: 2 })
   const [creating, setCreating] = useState(false)
+  const [deactivateId, setDeactivateId] = useState<string | null>(null)
 
   useEffect(() => {
     loadUsers()
@@ -33,17 +36,19 @@ export default function Users() {
       await api.post('/users', newUser)
       setShowCreate(false)
       setNewUser({ email: '', name: '', password: '', role_id: 2 })
+      toast.success('User berhasil dibuat')
       loadUsers()
     } catch {
-      alert('Gagal membuat user')
+      toast.error('Gagal membuat user. Email mungkin sudah terdaftar.')
     } finally {
       setCreating(false)
     }
   }
 
   const handleDeactivate = async (id: string) => {
-    if (!confirm('Nonaktifkan user ini?')) return
     await api.delete(`/users/${id}`)
+    setDeactivateId(null)
+    toast.info('User dinonaktifkan')
     loadUsers()
   }
 
@@ -161,7 +166,7 @@ export default function Users() {
               </span>
               {u.is_active && (
                 <button
-                  onClick={() => handleDeactivate(u.id)}
+                  onClick={() => setDeactivateId(u.id)}
                   className="text-xs text-red-500 hover:text-red-700 transition-colors"
                 >
                   Nonaktifkan
@@ -171,6 +176,17 @@ export default function Users() {
           ))}
         </div>
       </div>
+
+      <Modal
+        open={!!deactivateId}
+        onClose={() => setDeactivateId(null)}
+        onConfirm={() => deactivateId && handleDeactivate(deactivateId)}
+        title="Nonaktifkan user?"
+        description="User tidak akan bisa login lagi. Semua booking aktif akan dibatalkan."
+        confirmText="Nonaktifkan"
+        cancelText="Batal"
+        variant="danger"
+      />
     </motion.div>
   )
 }

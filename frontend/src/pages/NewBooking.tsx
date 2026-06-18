@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link2, ArrowRight, Loader2, Minus, Plus, Calendar, MapPin, Sparkles, MessageSquare, Users, CreditCard } from 'lucide-react'
 import api from '../api/client'
+import { toast } from '../components/Toast'
 
 interface EventPackage {
   name: string
@@ -107,7 +108,7 @@ export default function NewBooking() {
       })
       navigate(`/bookings/${data.id}`)
     } catch {
-      setError('Gagal membuat booking')
+      toast.error('Gagal membuat booking')
     } finally {
       setLoading(false)
     }
