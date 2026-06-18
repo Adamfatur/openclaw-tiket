@@ -30,7 +30,7 @@ export default function Layout() {
             <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
               <Activity className="w-4 h-4 text-white" />
             </div>
-            <span className="text-lg font-semibold text-text-primary">ClawTiket</span>
+            <span className="text-lg font-semibold text-text-primary">ApaAja</span>
           </Link>
         </div>
 
@@ -84,7 +84,7 @@ export default function Layout() {
       <header className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-white/80 backdrop-blur-xl border-b border-sand-200 z-30 flex items-center justify-between px-4">
         <Link to="/" className="flex items-center gap-2">
           <Activity className="w-5 h-5 text-accent" />
-          <span className="font-semibold text-text-primary">ClawTiket</span>
+          <span className="font-semibold text-text-primary">ApaAja</span>
         </Link>
         <div className="flex items-center gap-2">
           {navItems.map((item) => (

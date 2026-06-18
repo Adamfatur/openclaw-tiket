@@ -15,16 +15,14 @@ RUN pip install --no-cache-dir \
     playwright==1.49.0 \
     httpx==0.28.0 \
     uvicorn==0.34.0 \
-    fastapi==0.115.0
+    fastapi==0.115.0 \
+    boto3==1.35.0
 
 # Install Chromium for Playwright
 RUN playwright install chromium
 
 WORKDIR /app
 COPY . .
-
-# Health + task server
-COPY server.py /app/server.py
 
 EXPOSE 3000
 CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "3000"]

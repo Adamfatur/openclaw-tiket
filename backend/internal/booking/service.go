@@ -95,7 +95,20 @@ func (s *Service) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		s.db.Pool.Exec(r.Context(),
 			`UPDATE bookings SET status = 'in_progress', updated_at = NOW() WHERE id = $1`, bookingID)
 
-		slog.Info("booking assigned to slot", "booking_id", bookingID, "slot", slotNumber)
+		// Dispatch task to claw container
+		task := pool.BookingTask{
+			BookingID:      bookingID,
+			EventURL:       req.EventURL,
+			EventName:      req.EventName,
+			TicketCategory: req.TicketCategory,
+			Quantity:       req.Quantity,
+			Notes:          req.Notes,
+		}
+		if err := s.pool.DispatchTask(slotNumber, task); err != nil {
+			slog.Error("dispatch failed", "error", err, "booking_id", bookingID)
+		}
+
+		slog.Info("booking assigned and dispatched", "booking_id", bookingID, "slot", slotNumber)
 
 		s.hub.SendToUser(claims.UserID, ws.Message{
 			Type:      "booking_update",
@@ -352,4 +365,19 @@ func (s *Service) AuditHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(logs)
+}
+
+func (s *Service) InternalStatusHandler(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	var status string
+	err := s.db.Pool.QueryRow(r.Context(),
+		`SELECT status FROM bookings WHERE id = $1`, id).Scan(&status)
+	if err != nil {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, `{"booking_id":"%s","status":"%s"}`, id, status)
 }

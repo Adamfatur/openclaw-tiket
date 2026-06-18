@@ -53,8 +53,8 @@ export default function Login() {
           >
             <Activity className="w-6 h-6 text-white" />
           </motion.div>
-          <h1 className="text-2xl font-semibold text-text-primary">ClawTiket</h1>
-          <p className="text-sm text-text-tertiary mt-1">AI-powered event ticket booking</p>
+          <h1 className="text-2xl font-semibold text-text-primary">ApaAja</h1>
+          <p className="text-sm text-text-tertiary mt-1">PastiBisa — AI-powered event ticket booking</p>
         </div>
 
         {/* Form */}
@@ -122,7 +122,7 @@ export default function Login() {
         </div>
 
         <p className="text-center text-xs text-text-tertiary mt-6">
-          Powered by OpenClaw + AWS Bedrock
+          By Adam Faturahman — Powered by OpenClaw + AWS Bedrock
         </p>
       </motion.div>
     </div>

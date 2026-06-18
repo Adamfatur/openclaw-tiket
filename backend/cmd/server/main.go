@@ -156,6 +156,7 @@ func main() {
 		// Internal (claw callbacks, no auth - internal network only)
 		r.Route("/internal", func(r chi.Router) {
 			r.Post("/claw/callback", bookingService.ClawCallbackHandler)
+			r.Get("/booking/{id}/status", bookingService.InternalStatusHandler)
 		})
 	})
 
