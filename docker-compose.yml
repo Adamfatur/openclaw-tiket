@@ -79,6 +79,7 @@ services:
       - AWS_REGION=${AWS_REGION:-ap-southeast-3}
       - OPENCLAW_DISABLE_BONJOUR=1
       - OPENCLAW_SKIP_ONBOARDING=1
+      - OPENCLAW_GATEWAY_TOKEN=apaaja-pastibisa-internal-2026
     command: ["node", "openclaw.mjs", "gateway", "--allow-unconfigured"]
     deploy:
       resources:
@@ -100,6 +101,7 @@ services:
       - AWS_REGION=${AWS_REGION:-ap-southeast-3}
       - OPENCLAW_DISABLE_BONJOUR=1
       - OPENCLAW_SKIP_ONBOARDING=1
+      - OPENCLAW_GATEWAY_TOKEN=apaaja-pastibisa-internal-2026
     command: ["node", "openclaw.mjs", "gateway", "--allow-unconfigured"]
     deploy:
       resources:
@@ -121,6 +123,7 @@ services:
       - AWS_REGION=${AWS_REGION:-ap-southeast-3}
       - OPENCLAW_DISABLE_BONJOUR=1
       - OPENCLAW_SKIP_ONBOARDING=1
+      - OPENCLAW_GATEWAY_TOKEN=apaaja-pastibisa-internal-2026
     command: ["node", "openclaw.mjs", "gateway", "--allow-unconfigured"]
     deploy:
       resources:
