@@ -122,7 +122,7 @@ export default function Login() {
         </div>
 
         <p className="text-center text-xs text-text-tertiary mt-6">
-          By Adam Faturahman — Powered by OpenClaw + AWS Bedrock
+          By Adam Faturahman
         </p>
       </motion.div>
     </div>

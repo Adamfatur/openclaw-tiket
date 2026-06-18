@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { LayoutDashboard, Ticket, Users, LogOut, Activity, Settings } from 'lucide-react'
+import { LayoutDashboard, Ticket, Users, LogOut, Activity, Settings, Monitor } from 'lucide-react'
 import { useAuthStore } from '../stores/auth'
 
 export default function Layout() {
@@ -17,7 +17,10 @@ export default function Layout() {
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/book', icon: Ticket, label: 'Pesan Tiket' },
     { path: '/settings', icon: Settings, label: 'Pengaturan' },
-    ...(user?.role === 'admin' ? [{ path: '/users', icon: Users, label: 'Users' }] : []),
+    ...(user?.role === 'admin' ? [
+      { path: '/monitor', icon: Monitor, label: 'Monitor' },
+      { path: '/users', icon: Users, label: 'Users' },
+    ] : []),
   ]
 
   return (

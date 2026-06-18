@@ -7,6 +7,7 @@ import NewBooking from './pages/NewBooking'
 import BookingDetail from './pages/BookingDetail'
 import Users from './pages/Users'
 import Settings from './pages/Settings'
+import Monitor from './pages/Monitor'
 import Layout from './components/Layout'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -44,6 +45,14 @@ export default function App() {
           element={
             <AdminRoute>
               <Users />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="monitor"
+          element={
+            <AdminRoute>
+              <Monitor />
             </AdminRoute>
           }
         />
