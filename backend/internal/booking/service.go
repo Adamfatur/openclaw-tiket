@@ -1,6 +1,7 @@
 package booking
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -22,11 +23,13 @@ type Service struct {
 }
 
 type CreateBookingRequest struct {
-	EventName      string `json:"event_name"`
-	EventURL       string `json:"event_url"`
-	TicketCategory string `json:"ticket_category"`
-	Quantity       int    `json:"quantity"`
-	Notes          string `json:"notes,omitempty"`
+	EventName      string   `json:"event_name"`
+	EventURL       string   `json:"event_url"`
+	TicketCategory string   `json:"ticket_category"`
+	Quantity       int      `json:"quantity"`
+	Notes          string   `json:"notes,omitempty"`
+	PaymentMethod  string   `json:"payment_method,omitempty"`
+	GuestIDs       []string `json:"guest_ids,omitempty"`
 }
 
 type Booking struct {
@@ -52,6 +55,82 @@ func NewService(database *db.DB, redisClient *redis.Client, poolMgr *pool.Manage
 		pool:  poolMgr,
 		hub:   hub,
 	}
+}
+
+// runAgentBooking executes the OpenClaw agent run in the background, then
+// updates the booking with the result and releases the slot.
+func (s *Service) runAgentBooking(slotNumber int, task pool.BookingTask, userID string) {
+	ctx := context.Background()
+
+	result, err := s.pool.DispatchTask(slotNumber, task)
+
+	if err != nil {
+		slog.Error("agent booking failed", "booking_id", task.BookingID, "error", err)
+		s.db.Pool.Exec(ctx,
+			`UPDATE bookings SET status = 'failed', updated_at = NOW() WHERE id = $1`, task.BookingID)
+		s.db.Pool.Exec(ctx,
+			`INSERT INTO booking_steps (booking_id, step_number, action, message, status)
+			 VALUES ($1, 1, 'agent_error', $2, 'failed')`, task.BookingID, err.Error())
+		s.hub.SendToUser(userID, ws.Message{
+			Type: "booking_update", BookingID: task.BookingID, Status: "failed",
+			Message: "Agent gagal: " + err.Error(),
+		})
+	} else {
+		// Extract the agent's text output from the OpenResponses payload
+		summary := extractAgentText(result)
+		resultJSON, _ := json.Marshal(map[string]string{"agent_output": summary})
+
+		s.db.Pool.Exec(ctx,
+			`UPDATE bookings SET status = 'awaiting_confirmation', result = $1, updated_at = NOW() WHERE id = $2`,
+			resultJSON, task.BookingID)
+		s.db.Pool.Exec(ctx,
+			`INSERT INTO booking_steps (booking_id, step_number, action, message, status)
+			 VALUES ($1, 1, 'agent_complete', $2, 'completed')`, task.BookingID, summary)
+		s.hub.SendToUser(userID, ws.Message{
+			Type: "booking_update", BookingID: task.BookingID, Status: "awaiting_confirmation",
+			Message: summary,
+		})
+	}
+
+	// Release the slot, assign next queued booking if any
+	if next := s.pool.Release(slotNumber); next != nil {
+		slog.Info("processing next queued booking", "booking_id", next.BookingID)
+	}
+}
+
+// extractAgentText pulls readable text out of an OpenResponses JSON payload.
+func extractAgentText(raw string) string {
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		if len(raw) > 500 {
+			return raw[:500]
+		}
+		return raw
+	}
+	// OpenResponses: output[].content[].text
+	if output, ok := parsed["output"].([]interface{}); ok {
+		for _, item := range output {
+			if m, ok := item.(map[string]interface{}); ok {
+				if content, ok := m["content"].([]interface{}); ok {
+					for _, c := range content {
+						if cm, ok := c.(map[string]interface{}); ok {
+							if txt, ok := cm["text"].(string); ok && txt != "" {
+								return txt
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	// Fallback: output_text field
+	if txt, ok := parsed["output_text"].(string); ok && txt != "" {
+		return txt
+	}
+	if len(raw) > 500 {
+		return raw[:500]
+	}
+	return raw
 }
 
 func (s *Service) CreateHandler(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +174,7 @@ func (s *Service) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		s.db.Pool.Exec(r.Context(),
 			`UPDATE bookings SET status = 'in_progress', updated_at = NOW() WHERE id = $1`, bookingID)
 
-		// Dispatch task to claw container
+		// Dispatch to OpenClaw agent asynchronously (agent runs take minutes)
 		task := pool.BookingTask{
 			BookingID:      bookingID,
 			EventURL:       req.EventURL,
@@ -103,18 +182,17 @@ func (s *Service) CreateHandler(w http.ResponseWriter, r *http.Request) {
 			TicketCategory: req.TicketCategory,
 			Quantity:       req.Quantity,
 			Notes:          req.Notes,
+			PaymentMethod:  req.PaymentMethod,
 		}
-		if err := s.pool.DispatchTask(slotNumber, task); err != nil {
-			slog.Error("dispatch failed", "error", err, "booking_id", bookingID)
-		}
+		go s.runAgentBooking(slotNumber, task, claims.UserID)
 
-		slog.Info("booking assigned and dispatched", "booking_id", bookingID, "slot", slotNumber)
+		slog.Info("booking assigned, agent dispatched", "booking_id", bookingID, "slot", slotNumber)
 
 		s.hub.SendToUser(claims.UserID, ws.Message{
 			Type:      "booking_update",
 			BookingID: bookingID,
 			Status:    "in_progress",
-			Message:   "Booking sedang diproses oleh agent",
+			Message:   "Agent sedang membuka tiket.com dan memproses booking...",
 		})
 	} else {
 		queuePos := s.pool.QueuePosition(bookingID)

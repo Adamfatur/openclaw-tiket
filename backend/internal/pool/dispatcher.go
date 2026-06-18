@@ -32,14 +32,14 @@ var ClawContainerURLs = map[int]string{
 	3: "http://claw-3:18789",
 }
 
-// DispatchTask sends a booking task to OpenClaw as a natural language message
-func (m *Manager) DispatchTask(slotNumber int, task BookingTask) error {
+// DispatchTask runs a booking task on OpenClaw and returns the agent's final response.
+// BLOCKS until the agent completes (can take minutes) — call it in a goroutine.
+func (m *Manager) DispatchTask(slotNumber int, task BookingTask) (string, error) {
 	url, ok := ClawContainerURLs[slotNumber]
 	if !ok {
-		return fmt.Errorf("unknown slot number: %d", slotNumber)
+		return "", fmt.Errorf("unknown slot number: %d", slotNumber)
 	}
 
-	// Construct natural language instruction for OpenClaw
 	instruction := fmt.Sprintf(
 		`Tolong booking tiket event berikut di tiket.com:
 
@@ -51,40 +51,39 @@ Metode Pembayaran: %s
 
 Catatan tambahan: %s
 
-Booking ID (internal): %s
-
-Ikuti skill "tiket-booking" yang sudah terinstall. Setelah sampai halaman pembayaran, STOP dan laporkan detail (total harga, order ID, nomor VA jika ada). Jangan lanjutkan pembayaran tanpa konfirmasi.`,
+Ikuti skill "tiket-booking" yang sudah terinstall. Buka URL event, pilih paket dan jumlah tiket, lanjut ke halaman order. Setelah sampai halaman pembayaran, STOP dan laporkan detail (total harga, order ID, nomor VA jika ada). JANGAN selesaikan pembayaran.`,
 		task.EventName, task.EventURL, task.TicketCategory,
-		task.Quantity, task.PaymentMethod, task.Notes, task.BookingID,
+		task.Quantity, task.PaymentMethod, task.Notes,
 	)
 
-	// Send to OpenClaw gateway via POST /api/v1/message
+	// model="openclaw" runs the full agent (browser tools + skills), backend = configured Bedrock model
 	payload := map[string]interface{}{
-		"channel":           "api",
-		"message":           instruction,
-		"wait_for_response": false, // Don't block — let it run async
-		"timeout_ms":        600000, // 10 minutes
+		"model": "openclaw",
+		"input": instruction,
+		"user":  task.BookingID,
 	}
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("marshal message: %w", err)
+		return "", fmt.Errorf("marshal message: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	// Long timeout — agent runs can take several minutes
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url+"/api/v1/message", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", url+"/v1/responses", bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("create request: %w", err)
+		return "", fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+clawGatewayToken)
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 10 * time.Minute}
+	resp, err := client.Do(req)
 	if err != nil {
 		slog.Error("dispatch to OpenClaw failed", "slot", slotNumber, "error", err)
-		return fmt.Errorf("dispatch to claw-%d: %w", slotNumber, err)
+		return "", fmt.Errorf("dispatch to claw-%d: %w", slotNumber, err)
 	}
 	defer resp.Body.Close()
 
@@ -92,17 +91,11 @@ Ikuti skill "tiket-booking" yang sudah terinstall. Setelah sampai halaman pembay
 
 	if resp.StatusCode >= 400 {
 		slog.Error("OpenClaw rejected task", "slot", slotNumber, "status", resp.StatusCode, "body", string(respBody))
-		return fmt.Errorf("claw-%d rejected: status %d", slotNumber, resp.StatusCode)
+		return "", fmt.Errorf("claw-%d returned status %d", slotNumber, resp.StatusCode)
 	}
 
-	slog.Info("task dispatched to OpenClaw",
-		"slot", slotNumber,
-		"booking_id", task.BookingID,
-		"event", task.EventName,
-		"response_status", resp.StatusCode,
-	)
-
-	return nil
+	slog.Info("OpenClaw agent completed", "slot", slotNumber, "booking_id", task.BookingID, "event", task.EventName)
+	return string(respBody), nil
 }
 
 // HealthCheck pings OpenClaw gateway health endpoint

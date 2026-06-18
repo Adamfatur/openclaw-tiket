@@ -14,7 +14,15 @@ mkdir -p "$CONFIG_DIR"
 # Config matches the litellm provider plugin schema (api: openai-completions).
 cat > "$CONFIG_DIR/openclaw.json" <<EOF
 {
-  "gateway": { "mode": "local" },
+  "gateway": {
+    "mode": "local",
+    "http": {
+      "endpoints": {
+        "responses": { "enabled": true },
+        "chatCompletions": { "enabled": true }
+      }
+    }
+  },
   "browser": { "enabled": true, "headless": true },
   "models": {
     "providers": {
