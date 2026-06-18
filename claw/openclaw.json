@@ -1,0 +1,48 @@
+{
+  "models": {
+    "bedrockDiscovery": {
+      "enabled": true,
+      "region": "ap-southeast-3",
+      "providerFilter": ["anthropic"],
+      "refreshInterval": 3600,
+      "defaultContextWindow": 200000,
+      "defaultMaxTokens": 4096
+    },
+    "providers": {
+      "amazon-bedrock": {
+        "baseUrl": "https://bedrock-runtime.ap-southeast-3.amazonaws.com",
+        "api": "bedrock-converse-stream",
+        "auth": "aws-sdk",
+        "models": [
+          {
+            "id": "anthropic.claude-haiku-4-5-20251001-v1:0",
+            "name": "Claude Haiku 4.5 (Jakarta)",
+            "reasoning": false,
+            "input": ["text", "image"],
+            "cost": { "input": 0.8, "output": 4, "cacheRead": 0.08, "cacheWrite": 1 },
+            "contextWindow": 200000,
+            "maxTokens": 4096
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "amazon-bedrock/anthropic.claude-haiku-4-5-20251001-v1:0"
+      }
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "bind": "lan",
+    "controlUi": {
+      "allowedOrigins": ["*"]
+    }
+  },
+  "browser": {
+    "enabled": true,
+    "headless": true
+  }
+}

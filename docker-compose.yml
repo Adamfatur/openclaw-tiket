@@ -75,9 +75,9 @@ services:
     restart: unless-stopped
     environment:
       - SLOT_NUMBER=1
-      - BEDROCK_MODEL=${BEDROCK_MODEL}
+      - AWS_PROFILE=default
       - AWS_REGION=${AWS_REGION:-ap-southeast-3}
-      - API_CALLBACK_URL=http://api:8080/internal/claw/callback
+      - OPENCLAW_DISABLE_BONJOUR=1
     deploy:
       resources:
         limits:
@@ -94,9 +94,9 @@ services:
     restart: unless-stopped
     environment:
       - SLOT_NUMBER=2
-      - BEDROCK_MODEL=${BEDROCK_MODEL}
+      - AWS_PROFILE=default
       - AWS_REGION=${AWS_REGION:-ap-southeast-3}
-      - API_CALLBACK_URL=http://api:8080/internal/claw/callback
+      - OPENCLAW_DISABLE_BONJOUR=1
     deploy:
       resources:
         limits:
@@ -113,9 +113,9 @@ services:
     restart: unless-stopped
     environment:
       - SLOT_NUMBER=3
-      - BEDROCK_MODEL=${BEDROCK_MODEL}
+      - AWS_PROFILE=default
       - AWS_REGION=${AWS_REGION:-ap-southeast-3}
-      - API_CALLBACK_URL=http://api:8080/internal/claw/callback
+      - OPENCLAW_DISABLE_BONJOUR=1
     deploy:
       resources:
         limits:

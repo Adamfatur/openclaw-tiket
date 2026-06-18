@@ -1,28 +1,14 @@
-FROM python:3.12-slim
+FROM ghcr.io/openclaw/openclaw:latest
 
-ENV PYTHONUNBUFFERED=1
-ENV DEBIAN_FRONTEND=noninteractive
+# Set environment for Bedrock via EC2 instance role
+ENV AWS_PROFILE=default
+ENV AWS_REGION=ap-southeast-3
+ENV OPENCLAW_DISABLE_BONJOUR=1
 
-# System deps for Chromium
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget curl gnupg ca-certificates fonts-liberation \
-    libasound2 libatk-bridge2.0-0 libdrm2 libgbm1 \
-    libgtk-3-0 libnspr4 libnss3 libxss1 xdg-utils \
-    && rm -rf /var/lib/apt/lists/*
+# Copy our custom skill
+COPY skills/ /app/skills/
 
-# Python deps
-RUN pip install --no-cache-dir \
-    playwright==1.49.0 \
-    httpx==0.28.0 \
-    uvicorn==0.34.0 \
-    fastapi==0.115.0 \
-    boto3==1.35.0
+# Copy openclaw config for Bedrock
+COPY openclaw.json /root/.openclaw/openclaw.json
 
-# Install Chromium for Playwright
-RUN playwright install chromium
-
-WORKDIR /app
-COPY . .
-
-EXPOSE 3000
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "3000"]
+EXPOSE 18789
