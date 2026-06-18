@@ -16,6 +16,8 @@ ENV CHROME_PATH=/usr/bin/chromium
 ENV CHROME_BIN=/usr/bin/chromium
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+ENV CHROMIUM_FLAGS="--no-sandbox --disable-dev-shm-usage --disable-gpu --headless"
+ENV OPENCLAW_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium
 
 ENV OPENCLAW_SKIP_ONBOARDING=1
 ENV OPENCLAW_DISABLE_BONJOUR=1

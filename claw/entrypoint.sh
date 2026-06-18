@@ -25,10 +25,7 @@ cat > "$CONFIG_DIR/openclaw.json" <<EOF
   },
   "browser": {
     "enabled": true,
-    "headless": true,
-    "profile": "openclaw",
-    "executablePath": "/usr/bin/chromium",
-    "launchArgs": ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
+    "headless": true
   },
   "models": {
     "providers": {
