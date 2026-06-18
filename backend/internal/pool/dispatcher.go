@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -21,55 +22,90 @@ type BookingTask struct {
 	GuestIDs       []string `json:"guest_ids"`
 }
 
-// ClawContainerURLs maps slot numbers to container internal URLs
+// OpenClaw gateway token (internal, set via docker-compose env)
+const clawGatewayToken = "apaaja-pastibisa-internal-2026"
+
+// ClawContainerURLs maps slot numbers to OpenClaw gateway URLs
 var ClawContainerURLs = map[int]string{
-	1: "http://claw-1:3000",
-	2: "http://claw-2:3000",
-	3: "http://claw-3:3000",
+	1: "http://claw-1:18789",
+	2: "http://claw-2:18789",
+	3: "http://claw-3:18789",
 }
 
-// DispatchTask sends a booking task to the assigned claw container
+// DispatchTask sends a booking task to OpenClaw as a natural language message
 func (m *Manager) DispatchTask(slotNumber int, task BookingTask) error {
 	url, ok := ClawContainerURLs[slotNumber]
 	if !ok {
 		return fmt.Errorf("unknown slot number: %d", slotNumber)
 	}
 
-	body, err := json.Marshal(task)
-	if err != nil {
-		return fmt.Errorf("marshal task: %w", err)
+	// Construct natural language instruction for OpenClaw
+	instruction := fmt.Sprintf(
+		`Tolong booking tiket event berikut di tiket.com:
+
+Event: %s
+URL: %s
+Kategori/Paket: %s
+Jumlah Tiket: %d
+Metode Pembayaran: %s
+
+Catatan tambahan: %s
+
+Booking ID (internal): %s
+
+Ikuti skill "tiket-booking" yang sudah terinstall. Setelah sampai halaman pembayaran, STOP dan laporkan detail (total harga, order ID, nomor VA jika ada). Jangan lanjutkan pembayaran tanpa konfirmasi.`,
+		task.EventName, task.EventURL, task.TicketCategory,
+		task.Quantity, task.PaymentMethod, task.Notes, task.BookingID,
+	)
+
+	// Send to OpenClaw gateway via POST /api/v1/message
+	payload := map[string]interface{}{
+		"channel":           "api",
+		"message":           instruction,
+		"wait_for_response": false, // Don't block — let it run async
+		"timeout_ms":        600000, // 10 minutes
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal message: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url+"/task", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", url+"/api/v1/message", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+clawGatewayToken)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		slog.Error("dispatch task failed", "slot", slotNumber, "error", err)
+		slog.Error("dispatch to OpenClaw failed", "slot", slotNumber, "error", err)
 		return fmt.Errorf("dispatch to claw-%d: %w", slotNumber, err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("claw-%d rejected task: status %d", slotNumber, resp.StatusCode)
+	respBody, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode >= 400 {
+		slog.Error("OpenClaw rejected task", "slot", slotNumber, "status", resp.StatusCode, "body", string(respBody))
+		return fmt.Errorf("claw-%d rejected: status %d", slotNumber, resp.StatusCode)
 	}
 
-	slog.Info("task dispatched to claw",
+	slog.Info("task dispatched to OpenClaw",
 		"slot", slotNumber,
 		"booking_id", task.BookingID,
 		"event", task.EventName,
+		"response_status", resp.StatusCode,
 	)
 
 	return nil
 }
 
-// HealthCheck pings a claw container
+// HealthCheck pings OpenClaw gateway health endpoint
 func (m *Manager) HealthCheck(slotNumber int) bool {
 	url, ok := ClawContainerURLs[slotNumber]
 	if !ok {
@@ -79,10 +115,11 @@ func (m *Manager) HealthCheck(slotNumber int) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url+"/health", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url+"/api/v1/health", nil)
 	if err != nil {
 		return false
 	}
+	req.Header.Set("Authorization", "Bearer "+clawGatewayToken)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -91,4 +128,31 @@ func (m *Manager) HealthCheck(slotNumber int) bool {
 	defer resp.Body.Close()
 
 	return resp.StatusCode == http.StatusOK
+}
+
+// GetConversations retrieves active conversations from a claw container
+func (m *Manager) GetConversations(slotNumber int) ([]map[string]interface{}, error) {
+	url, ok := ClawContainerURLs[slotNumber]
+	if !ok {
+		return nil, fmt.Errorf("unknown slot: %d", slotNumber)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url+"/api/v1/conversations", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+clawGatewayToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result []map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result, nil
 }

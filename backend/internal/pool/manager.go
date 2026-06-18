@@ -125,6 +125,16 @@ func (m *Manager) Status() PoolStatus {
 }
 
 func (m *Manager) StatusHandler(w http.ResponseWriter, r *http.Request) {
+	status := m.Status()
+
+	// Enrich with actual OpenClaw health check
+	for i := range status.Slots {
+		healthy := m.HealthCheck(status.Slots[i].Number)
+		if !healthy && status.Slots[i].Status == "idle" {
+			status.Slots[i].Status = "starting"
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(m.Status())
+	json.NewEncoder(w).Encode(status)
 }
