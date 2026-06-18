@@ -115,7 +115,7 @@ func (m *Manager) HealthCheck(slotNumber int) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url+"/api/v1/health", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url+"/health", nil)
 	if err != nil {
 		return false
 	}
